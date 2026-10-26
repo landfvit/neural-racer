@@ -1,0 +1,40 @@
+{
+  "repository": "https://github.com/bacinger/f1-circuits",
+  "revision": "8094e957b8d6aa8b9f4510c93968556cccd30e02",
+  "license": "MIT",
+  "files": [
+    "circuits/it-1922.geojson",
+    "circuits/gb-1948.geojson",
+    "circuits/be-1925.geojson",
+    "circuits/mc-1929.geojson",
+    "circuits/br-1940.geojson",
+    "LICENSE.md"
+  ],
+  "sha256": {
+    "be-1925.geojson": "b867de9cc8364cc9b545a044377a56a697b8db77823c849c1a1c03760a943381",
+    "br-1940.geojson": "e650e59b876af7c455ec3222e0801b5aab008ed858c71bf6bc84e7af6d6f2bba",
+    "gb-1948.geojson": "1e526462a785f15acb6bf9af2fefa7a1b4521e665bfbe663d58539516ba9ea68",
+    "it-1922.geojson": "8b0758ef5a52bb9360c7673d45e0fbea6f29f7349486c5acbb2fe9aa340cb495",
+    "mc-1929.geojson": "daf184fc7d0948cadd10ce9428ba87b5462d9df6e33daec7b6f9aad235dc879e",
+    "LICENSE": "f093960027c8ebcc3220000b8316ec29cc6f9149b7625ebad02524bf44ebf2f3"
+  },
+  "derivation": {
+    "source_geometry": "The original ordered LineString coordinates are retained. Only the repeated closing coordinate is omitted in the native route.",
+    "projection": "Local equirectangular projection in metres using the mean latitude and an Earth radius of 6371000 metres.",
+    "viewport": [
+      960,
+      640
+    ],
+    "fitting": "Uniform scale and rigid rotation chosen from 0 to 180 degrees in 0.25 degree increments, with a 45 pixel margin. No stretching, smoothing, or artificial corner changes.",
+    "road_width_metres": {
+      "monza": 12.0,
+      "silverstone": 12.0,
+      "spa": 12.0,
+      "monaco": 9.0,
+      "interlagos": 12.0
+    },
+    "road_width_note": "The GeoJSON supplies centerlines, not road boundaries. Widths are simulation approximations, not surveyed values. Monaco uses 9 metres so its close hairpin approaches remain separate.",
+    "road_mask": "Pixel centers must lie within half the specified projected road width of a source segment.",
+    "physics_note": "Cars use the same source projection scale. The simulation omits elevation and banking and compresses real travel time by a factor of three."
+  }
+}

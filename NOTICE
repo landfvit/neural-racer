@@ -1,0 +1,23 @@
+Circuit geometry
+
+The bundled Monza, Silverstone, Spa-Francorchamps, Monaco, and Interlagos
+centerlines come from Tomislav Bacinger's f1-circuits dataset.
+
+Source: https://github.com/bacinger/f1-circuits
+Revision: 8094e957b8d6aa8b9f4510c93968556cccd30e02
+Copyright (c) 2019-2025 Tomislav Bacinger
+License: MIT. The complete original notice is in racer/data/source/LICENSE.
+
+The original GeoJSON files are bundled for offline use. Their file hashes and
+source paths are recorded in racer/data/source/provenance.json.
+
+The training layouts are simplified approximations based on these coordinates.
+Roads are widened to 32 image pixels. Corners are smoothed and nearby stretches
+are moved apart so cars have room to turn without merging separate roads.
+The prepared layouts are in racer/data/circuit-layouts.json and can be rebuilt
+offline with scripts/build_circuit_layouts.py. The generated PNG examples and
+road masks use these adapted layouts. They are not surveyed circuit boundaries.
+
+Car physics retain each source map's scale. Elevation and banking are omitted.
+The simulation compresses travel time by a factor of three, so its lap times
+are suitable for comparing networks and are not real Formula 1 times.
