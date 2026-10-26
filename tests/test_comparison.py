@@ -7,7 +7,7 @@ import pytest
 import racer.comparison as comparison_module
 from racer.circuits import get_circuit
 from racer.comparison import Comparison
-from racer.engine import SIMULATION_HZ, Trainer
+from racer.engine import MAX_GENERATIONS, SIMULATION_HZ, Trainer
 from racer.networks import architecture_catalog, get_architecture
 from racer.service import Workbench
 
@@ -18,8 +18,9 @@ IDS = tuple(item['id'] for item in architecture_catalog())
 class ShortTrainer:
     """Deterministic unequal episode lengths for testing the generation barrier."""
 
-    def __init__(self, track, population=64, seed=42, architecture='compact'):
+    def __init__(self, track, population=64, seed=42, architecture='compact', generation_limit=MAX_GENERATIONS):
         self.track, self.population, self.seed = track, population, seed
+        self.generation_limit = generation_limit
         self.architecture = get_architecture(architecture)
         self.generation, self.step_count = 0, 0
         self.history, self.best_ever_time = [], None
@@ -46,11 +47,17 @@ class ShortTrainer:
 
     def evolve(self):
         assert self.done
-        assert self.generation < 99, 'there must not be a generation 100'
+        assert self.generation < self.generation_limit - 1, 'completed budgets must not evolve'
         self.evolutions += 1
         self.generation += 1
         self.done, self.step_count = False, 0
         return True
+
+    def set_generation_limit(self, limit):
+        assert type(limit) is int and 1 <= limit <= 10000
+        if limit < max(len(self.history), self.generation + 1):
+            raise ValueError('The budget cannot discard an attempted generation.')
+        self.generation_limit = limit
 
 
 @pytest.fixture
@@ -208,6 +215,45 @@ def test_comparison_stops_after_exactly_one_hundred_equal_generations(short_comp
         assert [item['generation'] for item in entry['history']] == list(range(100))
         assert entry['first_lap_generation'] == trainer.duration
         assert entry['best_time'] == min(item['lap_time'] for item in entry['history'] if item['lap_time'] is not None)
+
+
+def test_extending_completed_comparison_preserves_results_and_the_generation_barrier(short_comparison):
+    comparison = short_comparison
+    comparison.set_generation_limit(3)
+    for _ in range(30):
+        comparison.advance(16)
+        if comparison.complete:
+            break
+    assert comparison.complete
+    histories = {key: copy.deepcopy(trainer.history) for key, trainer in comparison.trainers.items()}
+    comparison.set_generation_limit(5)
+    assert not comparison.complete and comparison.generation_limit == 5
+    assert all(trainer.generation_limit == 5 and trainer.generation == 2 and trainer.done
+               for trainer in comparison.trainers.values())
+    assert all(trainer.history == histories[key] for key, trainer in comparison.trainers.items())
+    comparison.advance(16)
+    assert all(trainer.generation == 3 and trainer.step_count == 0 for trainer in comparison.trainers.values())
+    for _ in range(20):
+        comparison.advance(16)
+        if comparison.complete:
+            break
+    assert comparison.complete and comparison.snapshot(False)['completed_generations'] == 5
+    for key, trainer in comparison.trainers.items():
+        assert trainer.history[:3] == histories[key]
+        assert [item['generation'] for item in trainer.history] == list(range(5))
+        assert trainer.generation == trainer.evolutions == 4
+
+
+def test_reducing_comparison_budget_cannot_discard_a_generation(short_comparison):
+    comparison = short_comparison
+    for _ in range(5):
+        comparison.advance(16)
+    assert all(trainer.generation == 1 for trainer in comparison.trainers.values())
+    before = copy.deepcopy(comparison.snapshot(True))
+    with pytest.raises(ValueError):
+        comparison.set_generation_limit(1)
+    assert comparison.snapshot(True) == before
+    assert all(trainer.generation_limit == 100 for trainer in comparison.trainers.values())
 
 
 def test_missing_laps_stay_null_and_records_do_not_increase(short_comparison):

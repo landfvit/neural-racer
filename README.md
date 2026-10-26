@@ -1,6 +1,6 @@
 # Neural Racer
 
-A local Python simulator where neural networks learn to drive faster laps. Watch training, inspect the networks, compare architectures, or upload a track image.
+A local Python simulator where neural networks learn to drive faster laps.
 
 ## Run locally
 
@@ -23,7 +23,9 @@ Choose a circuit and network, then click **Train**. Translucent ghost cars show 
 
 **View network** opens layers and activations. Hover over nodes for details. Close it or press Escape to return.
 
-**Compare networks** starts all four architectures on the same track with 64 cars, seed 42, and 100 generations each. The network selector changes inspection. **Single network** starts fresh training of the selected architecture with ghost cars. **Reset**, track changes, and changing networks outside comparison create a fresh paused run.
+**Compare networks** starts all four architectures on the same track with 64 cars and the chosen seed and generation limit. The network selector changes inspection. **Single network** starts fresh training of the selected architecture with ghost cars. **Reset**, track changes, and changing networks outside comparison create a fresh paused run.
+
+**Generations** sets the training budget. Increase it to keep learning without losing progress. After a completed run, increase it and click **Train** to continue. **Seed** controls the random mutations. Changing it starts a fresh paused run. Both settings apply to single training and comparisons. Defaults are 100 generations and seed 42.
 
 ## How it learns
 

@@ -83,6 +83,64 @@ def test_invalid_speed_does_not_change_working_run(client, payload):
     assert client.get("/api/state").json() == before
 
 
+@pytest.mark.parametrize('generations', [1, 10000])
+def test_generation_setting_accepts_boundaries_and_keeps_the_current_run(client, generations):
+    bench = client.app.state.workbench
+    client.post('/api/train', json={'running': True})
+    bench.advance()
+    before = client.get('/api/state').json()
+    trainer = bench.trainer
+    response = client.post('/api/generations', json={'generations': generations})
+    assert response.status_code == 200, response.text
+    state = response.json()
+    assert state['generation_limit'] == generations and state['completed_generations'] == 0
+    assert state['seed'] == 42 and state['running']
+    assert state['cars'] == before['cars'] and state['history'] == before['history']
+    assert bench.trainer is trainer
+
+
+@pytest.mark.parametrize('payload', [
+    {'generations': 0}, {'generations': -1}, {'generations': 10001}, {'generations': True},
+    {'generations': 1.5}, {'generations': '200'}, {'generations': None},
+    {'generations': 200, 'extra': 1}, {},
+])
+def test_invalid_generation_setting_preserves_the_active_run(client, payload):
+    client.post('/api/train', json={'running': True})
+    client.app.state.workbench.advance()
+    before = client.get('/api/state').json()
+    response = client.post('/api/generations', json=payload)
+    assert response.status_code == 422 and response.json()['error']['message']
+    assert client.get('/api/state').json() == before
+
+
+@pytest.mark.parametrize('seed', [0, 4294967295])
+def test_seed_setting_accepts_boundaries_and_starts_fresh_paused_learning(client, seed):
+    client.post('/api/generations', json={'generations': 200})
+    client.post('/api/architecture', json={'id': 'split'})
+    client.post('/api/train', json={'running': True})
+    client.app.state.workbench.advance()
+    response = client.post('/api/seed', json={'seed': seed})
+    assert response.status_code == 200, response.text
+    state = response.json()
+    assert state['seed'] == seed and state['generation_limit'] == 200 and state['completed_generations'] == 0
+    assert state['generation'] == state['step_count'] == 0 and not state['running']
+    assert state['network']['id'] == 'split' and state['history'] == []
+    assert client.get('/api/model').json()['seed'] == seed
+
+
+@pytest.mark.parametrize('payload', [
+    {'seed': -1}, {'seed': 4294967296}, {'seed': True}, {'seed': 1.5},
+    {'seed': '100'}, {'seed': None}, {'seed': 100, 'extra': 1}, {},
+])
+def test_invalid_seed_setting_preserves_the_active_comparison(client, payload):
+    client.post('/api/comparison')
+    client.app.state.workbench.advance()
+    before = client.get('/api/state').json()
+    response = client.post('/api/seed', json=payload)
+    assert response.status_code == 422 and response.json()['error']['message']
+    assert client.get('/api/state').json() == before
+
+
 def test_reset_preserves_track_but_invalidates_old_frames_and_images(client):
     before = client.get("/api/state").json()
     client.post("/api/train", json={"running": True})

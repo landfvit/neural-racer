@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <title>Neural Racer</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <script src="/static/app.js?v=ea9ca46d216f" defer></script>
+    <link rel="stylesheet" href="/static/style.css?v=faa9b6b05c78">
+    <script src="/static/app.js?v=af3a1a0519d3" defer></script>
   </head>
   <body>
     <header class="toolbar">
@@ -16,10 +16,12 @@
       <label class="circuit-label"><span class="visually-hidden">Circuit</span><select id="circuit-select" title="Choose a circuit" disabled><option value="">Loading circuits</option></select></label>
       <label class="architecture-label"><span class="visually-hidden">Network</span><select id="architecture-select" title="Choose a neural network" disabled><option value="">Loading networks</option></select></label>
       <button id="train-button" class="primary" type="button" disabled>Train</button>
-      <button id="compare-button" type="button" title="Start fresh populations of all four networks on this track, with seed 42 and 100 generations each" disabled>Compare networks</button>
+      <button id="compare-button" type="button" title="Start fresh populations of all four networks with the selected seed and generation count" disabled>Compare networks</button>
       <button id="single-button" type="button" title="Start a fresh run of the selected network and show its whole population" hidden disabled>Single network</button>
       <button id="reset-button" type="button" title="Start a fresh population on this track" disabled>Reset</button>
       <label class="speed-label"><span class="visually-hidden">Training speed</span><select id="speed-select" title="Training speed" disabled><option value="1">1x</option><option value="4">4x</option><option value="16">16x</option></select></label>
+      <label class="run-setting">Generations<select id="generations-select" title="Generation limit. Increase it to continue an existing run." disabled><option value="100">100</option><option value="250">250</option><option value="500">500</option><option value="1000">1000</option></select></label>
+      <label class="run-setting">Seed<input id="seed-input" type="number" min="0" max="4294967295" step="1" value="42" title="Random seed. Changing it starts a fresh paused run." disabled></label>
       <label class="rays-label"><input id="show-rays" type="checkbox" checked>Rays</label>
       <button id="view-network-button" type="button" aria-haspopup="dialog" aria-controls="network-dialog">View network</button>
       <button id="save-button" type="button" title="Download the best completed neural policy as JSON" disabled>Save brain ↓</button>

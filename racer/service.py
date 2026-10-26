@@ -20,7 +20,8 @@ class Workbench:
         self.track = get_circuit("monza")
         self.circuit_id = "monza"
         self.difficulty = next(item["difficulty"] for item in circuit_catalog() if item["id"] == "monza")
-        self.trainer = Trainer(self.track)
+        self.seed, self.generation_limit = 42, MAX_GENERATIONS
+        self.trainer = Trainer(self.track, seed=self.seed, generation_limit=self.generation_limit)
         self.comparison = None
         self.running, self.speed = False, 4
         self.revision, self.sequence = 1, 1
@@ -81,6 +82,8 @@ class Workbench:
                         self.running = False
                 else:
                     self.trainer.tick(self.speed)
+                    if self.trainer.complete:
+                        self.running = False
             except Exception:
                 #one failed trainer pauses the whole comparison under the same lock
                 self.running = False
@@ -96,7 +99,9 @@ class Workbench:
             return {
                 **payload, "instance": self.instance, "revision": self.revision, "sequence": self.sequence,
                 "running": self.running, "speed": self.speed, "error": self.error,
-                "complete": self.comparison.complete if self.comparison is not None else self.trainer.done and self.trainer.generation >= MAX_GENERATIONS,
+                "seed": self.seed, "generation_limit": self.generation_limit,
+                "completed_generations": comparison["completed_generations"] if comparison is not None else len(self.trainer.history),
+                "complete": self.comparison.complete if self.comparison is not None else self.trainer.complete,
                 "comparison": comparison,
                 "track": {"name": self.track.name, "width": self.track.width, "height": self.track.height,
                           "circuit_id": self.circuit_id, "difficulty": self.difficulty,
@@ -115,7 +120,8 @@ class Workbench:
         #prepare everything before replacing a working run
         image = self._encode_image(track)
         with self.lock:
-            trainer = Trainer(track, architecture=self.trainer.architecture.id)
+            trainer = Trainer(track, seed=self.seed, architecture=self.trainer.architecture.id,
+                              generation_limit=self.generation_limit)
             self.track, self.trainer, self._image = track, trainer, image
             self.comparison = None
             self.circuit_id, self.difficulty = circuit_id, difficulty
@@ -131,7 +137,8 @@ class Workbench:
 
     def reset(self):
         with self.lock:
-            self.trainer = Trainer(self.track, architecture=self.trainer.architecture.id)
+            self.trainer = Trainer(self.track, seed=self.seed, architecture=self.trainer.architecture.id,
+                                   generation_limit=self.generation_limit)
             self.comparison = None
             self.running, self.error = False, None
             self.revision += 1
@@ -145,7 +152,8 @@ class Workbench:
                 self.trainer = self.comparison.trainers[architecture.id]
                 self.sequence += 1
                 return self.snapshot()
-            trainer = Trainer(self.track, architecture=architecture.id)
+            trainer = Trainer(self.track, seed=self.seed, architecture=architecture.id,
+                              generation_limit=self.generation_limit)
             self.trainer = trainer
             self.running, self.error = False, None
             self.revision += 1
@@ -155,7 +163,7 @@ class Workbench:
     def start_comparison(self):
         with self.lock:
             selected = self.trainer.architecture.id
-            comparison = Comparison(self.track)
+            comparison = Comparison(self.track, seed=self.seed, generation_limit=self.generation_limit)
             self.comparison, self.trainer = comparison, comparison.trainers[selected]
             self.running, self.error = True, None
             self.revision += 1
@@ -165,9 +173,9 @@ class Workbench:
     def set_running(self, running):
         with self.lock:
             if running and self.comparison is not None and self.comparison.complete:
-                raise ValueError("This comparison is complete. Start a new comparison or reset to train again.")
-            if running and self.trainer.done and self.trainer.generation >= MAX_GENERATIONS:
-                raise ValueError("This run is complete. Reset to start again.")
+                raise ValueError("This comparison is complete. Increase generations or reset to train again.")
+            if running and self.comparison is None and self.trainer.complete:
+                raise ValueError("This run is complete. Increase generations or reset to train again.")
             self.running, self.error = running, None
             self.sequence += 1
             return self.snapshot()
@@ -175,6 +183,39 @@ class Workbench:
     def set_speed(self, speed):
         with self.lock:
             self.speed = speed
+            self.sequence += 1
+            return self.snapshot()
+
+    def set_generations(self, generations):
+        with self.lock:
+            if self.comparison is not None:
+                self.comparison.set_generation_limit(generations)
+            else:
+                self.trainer.set_generation_limit(generations)
+            self.generation_limit = generations
+            complete = self.comparison.complete if self.comparison is not None else self.trainer.complete
+            if complete:
+                self.running = False
+            self.sequence += 1
+            return self.snapshot()
+
+    def set_seed(self, seed):
+        if type(seed) is not int or not 0 <= seed <= 2**32 - 1:
+            raise ValueError("Seed must be an integer from 0 to 4294967295.")
+        with self.lock:
+            if seed == self.seed:
+                return self.snapshot()
+            selected = self.trainer.architecture.id
+            if self.comparison is not None:
+                comparison = Comparison(self.track, seed=seed, generation_limit=self.generation_limit)
+                trainer = comparison.trainers[selected]
+            else:
+                comparison = None
+                trainer = Trainer(self.track, seed=seed, architecture=selected,
+                                  generation_limit=self.generation_limit)
+            self.seed, self.comparison, self.trainer = seed, comparison, trainer
+            self.running, self.error = False, None
+            self.revision += 1
             self.sequence += 1
             return self.snapshot()
 

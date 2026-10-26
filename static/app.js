@@ -57,16 +57,36 @@ function updateControls() {
   $("train-button").textContent = state?.complete ? "Complete" : state?.running ? "Pause" : "Train";
   $("compare-button").disabled = pending || !state || !connected;
   $("compare-button").textContent = state?.comparison ? "Restart comparison" : "Compare networks";
+  $("compare-button").title = `Start fresh populations of all four networks on this track, with seed ${state?.seed ?? 42} and ${generationLimit} generations each`;
   $("single-button").hidden = !state?.comparison;
   $("single-button").disabled = pending || !state || !connected;
   $("reset-button").disabled = pending || !state;
   $("speed-select").disabled = pending || !state;
+  $("generations-select").disabled = pending || !state || !connected;
+  $("seed-input").disabled = pending || !state || !connected;
   $("save-button").disabled = pending || !state?.history?.length;
   $("comparison-rows").querySelectorAll("button").forEach((button) => { button.disabled = pending; });
   if (state) $("speed-select").value = String(state.speed);
+  renderRunSettings();
   renderCircuitSelect();
   renderArchitectureSelect();
   $("workspace").setAttribute("aria-busy", String(pending));
+}
+
+function renderRunSettings() {
+  const select = $("generations-select");
+  const value = String(generationLimit);
+  for (const option of select.querySelectorAll("option[data-custom]")) if (option.value !== value) option.remove();
+  if (![...select.options].some((option) => option.value === value)) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    option.dataset.custom = "true";
+    select.append(option);
+  }
+  select.value = value;
+  // live snapshots must not overwrite a seed that is still being typed.
+  if (document.activeElement !== $("seed-input")) $("seed-input").value = String(state?.seed ?? 42);
 }
 
 function renderCircuitSelect() {
@@ -189,12 +209,12 @@ function acceptState(snapshot) {
   if (changedTrack) {
     revision = snapshot.revision;
     lastSequence = -1;
-    generationLimit = 100;
   }
   if (snapshot.network?.id !== state?.network?.id) hoveredNode = null;
   state = snapshot;
   lastSequence = Number.isFinite(snapshot.sequence) ? snapshot.sequence : lastSequence;
-  generationLimit = Math.max(generationLimit, state.generation || 0);
+  const limit = state.generation_limit ?? state.comparison?.generation_limit;
+  if (Number.isInteger(limit) && limit >= 1) generationLimit = limit;
   const car = leader();
   $("track-name").textContent = state.track.name || "Track";
   $("track-name").title = state.track.name || "Track";
@@ -413,7 +433,8 @@ function drawHistory() {
   const history = state?.history || [];
   const area = { left: 48, right: width - 42, top: 15, bottom: height - 22 };
   if (area.right <= area.left || area.bottom <= area.top) return;
-  const x = (generation) => area.left + generation / generationLimit * (area.right - area.left);
+  const lastGeneration = Math.max(0, generationLimit - 1);
+  const x = (generation) => area.left + generation / Math.max(1, lastGeneration) * (area.right - area.left);
   const fitnessY = (value) => area.bottom - (value - fitnessDomain.min) / (fitnessDomain.max - fitnessDomain.min) * (area.bottom - area.top);
   const timeY = (value) => area.bottom - value / TIME_LIMIT * (area.bottom - area.top);
   ctx.font = "8px ui-monospace, monospace";
@@ -427,7 +448,7 @@ function drawHistory() {
     ctx.fillText(scalar(ratio * TIME_LIMIT, ratio === 0 ? 0 : 2), area.left - 7, y + 3);
     ctx.textAlign = "left"; ctx.fillText(String(Math.round(fitnessDomain.min + ratio * (fitnessDomain.max - fitnessDomain.min))), area.right + 7, y + 3);
   }
-  for (const generation of [0, generationLimit / 2, generationLimit]) { ctx.textAlign = "center"; ctx.fillText(String(generation), x(generation), area.bottom + 15); }
+  for (const generation of new Set([0, Math.floor(lastGeneration / 2), lastGeneration])) { ctx.textAlign = "center"; ctx.fillText(String(generation), x(generation), area.bottom + 15); }
   for (const [field, color, scale] of [["best_fitness", "#648cb4", fitnessY], ["lap_time", "#76a28a", timeY]]) {
     if (!history.length) continue;
     ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.beginPath();
@@ -459,7 +480,7 @@ function renderComparison() {
   $("comparison-note").hidden = !comparison;
   $("comparison-results").hidden = !comparison;
   $("history-title").textContent = comparison ? "Comparison" : "Learning";
-  $("history-label").textContent = comparison ? `${comparison.completed_generations} / ${comparison.generation_limit} generations` : `Generation ${state?.generation || 0}`;
+  $("history-label").textContent = `${comparison?.completed_generations ?? state?.completed_generations ?? state?.history?.length ?? 0} / ${generationLimit} generations`;
   const legendKey = comparison ? entries.map((entry) => `${entry.id}/${entry.name}`).join(",") : "normal";
   if (comparisonLegendKey !== legendKey) {
     comparisonLegendKey = legendKey;
@@ -520,7 +541,7 @@ function drawComparisonHistory() {
   const comparison = state.comparison;
   const area = { left: 48, right: width - 20, top: 20, bottom: height - 27 };
   if (area.right <= area.left || area.bottom <= area.top) return;
-  const lastGeneration = Math.max(1, comparison.generation_limit - 1);
+  const lastGeneration = Math.max(0, generationLimit - 1);
   const times = comparison.entries.flatMap((entry) => (entry.history || []).map((point) => point.best_time)).filter(Number.isFinite);
   const fastest = times.length ? Math.min(...times) : 0;
   const slowest = times.length ? Math.max(...times) : TIME_LIMIT;
@@ -528,7 +549,7 @@ function drawComparisonHistory() {
   // all traces share a fitted scale so small lap-time improvements stay visible.
   const minimum = times.length ? Math.max(0, fastest - padding) : 0;
   const maximum = times.length ? Math.min(TIME_LIMIT, slowest + padding) : TIME_LIMIT;
-  const x = (generation) => area.left + generation / lastGeneration * (area.right - area.left);
+  const x = (generation) => area.left + generation / Math.max(1, lastGeneration) * (area.right - area.left);
   const y = (time) => area.bottom - (time - minimum) / (maximum - minimum) * (area.bottom - area.top);
   ctx.font = "8px ui-monospace, monospace";
   ctx.fillStyle = "#8997a5"; ctx.textAlign = "left";
@@ -541,7 +562,7 @@ function drawComparisonHistory() {
     ctx.fillStyle = "#8997a5"; ctx.textAlign = "right";
     ctx.fillText(scalar(value, value === 0 ? 0 : 2), area.left - 7, lineY + 3);
   }
-  for (const generation of [0, Math.floor(lastGeneration / 2), lastGeneration]) {
+  for (const generation of new Set([0, Math.floor(lastGeneration / 2), lastGeneration])) {
     ctx.textAlign = "center"; ctx.fillText(String(generation), x(generation), area.bottom + 14);
   }
   ctx.textAlign = "right"; ctx.fillText("Generation", area.right, height - 2);
@@ -628,6 +649,24 @@ $("reset-button").addEventListener("click", () => action(async () => { acceptSta
 $("speed-select").addEventListener("change", () => {
   const speed = Number($("speed-select").value);
   action(async () => { acceptState(await request("/api/speed", { method: "POST", body: JSON.stringify({ speed }) })); });
+});
+$("generations-select").addEventListener("change", () => {
+  const generations = Number($("generations-select").value);
+  action(async () => { acceptState(await request("/api/generations", { method: "POST", body: JSON.stringify({ generations }) })); });
+});
+$("seed-input").addEventListener("change", () => {
+  const input = $("seed-input");
+  const seed = Number(input.value);
+  if (input.value.trim() === "" || !Number.isInteger(seed) || seed < 0 || seed > 4294967295) {
+    input.value = String(state?.seed ?? 42);
+    setStatus("Seed must be a whole number from 0 to 4294967295.", true);
+    return;
+  }
+  if (seed === state?.seed) return;
+  action(async () => {
+    try { acceptState(await request("/api/seed", { method: "POST", body: JSON.stringify({ seed }) })); }
+    catch (error) { input.value = String(state?.seed ?? 42); throw error; }
+  });
 });
 $("show-rays").addEventListener("change", drawTrack);
 $("view-network-button").addEventListener("click", () => {

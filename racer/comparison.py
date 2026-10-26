@@ -2,22 +2,33 @@
 
 from __future__ import annotations
 
-from .engine import MAX_GENERATIONS, Trainer
+from .engine import MAX_GENERATIONS, Trainer, validate_generation_limit
 from .networks import architecture_catalog
 
 
 class Comparison:
-    def __init__(self, track):
-        self.generation_limit = MAX_GENERATIONS
-        self.population, self.seed = 64, 42
+    def __init__(self, track, seed=42, generation_limit=MAX_GENERATIONS):
+        self.generation_limit = validate_generation_limit(generation_limit)
+        self.population, self.seed = 64, seed
         self.trainers = {
-            item["id"]: Trainer(track, population=self.population, seed=self.seed, architecture=item["id"])
+            item["id"]: Trainer(track, population=self.population, seed=self.seed, architecture=item["id"],
+                                generation_limit=self.generation_limit)
             for item in architecture_catalog()
         }
 
     @property
     def complete(self):
         return all(len(trainer.history) >= self.generation_limit for trainer in self.trainers.values())
+
+    def set_generation_limit(self, generation_limit):
+        generation_limit = validate_generation_limit(generation_limit)
+        minimum = max(len(trainer.history) if trainer.done else trainer.generation + 1
+                      for trainer in self.trainers.values())
+        if generation_limit < minimum:
+            raise ValueError(f"Generations must be at least {minimum} for this comparison. Reset to use a smaller budget.")
+        for trainer in self.trainers.values():
+            trainer.set_generation_limit(generation_limit)
+        self.generation_limit = generation_limit
 
     def advance(self, steps):
         if self.complete:

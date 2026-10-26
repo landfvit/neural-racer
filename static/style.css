@@ -15,6 +15,8 @@ h1, h2 { margin: 0; font-size: 12px; font-weight: 500; }
 .primary { color: #fff; background: #526a7e; border-color: #526a7e; min-width: 65px; }
 .primary:hover:not(:disabled) { background: #445e73; }
 .speed-label select { width: 65px; }
+.run-setting { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #818c97; }
+.run-setting input { width: 102px; min-height: 32px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 0; background: #fff; }
 .circuit-label select { width: 230px; }
 .architecture-label select { width: 245px; }
 .rays-label { font-size: 10px; color: #818c97; display: flex; align-items: center; gap: 5px; margin-left: 3px; }

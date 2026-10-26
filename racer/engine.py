@@ -12,11 +12,18 @@ from .networks import INPUT_NAMES as NETWORK_INPUTS, get_architecture
 INPUTS, HIDDEN, OUTPUTS = 5, 12, 3
 PARAMETERS = INPUTS * HIDDEN + HIDDEN + HIDDEN * OUTPUTS + OUTPUTS
 MAX_STEPS, MAX_GENERATIONS = 1400, 100
+MAX_GENERATION_LIMIT = 10_000
 SIMULATION_HZ = 30
 STALL_STEPS, LAP_LIMIT = 150, 1
 RAY_ANGLES = np.deg2rad([-60, -30, 0, 30, 60])
 INPUT_NAMES = list(NETWORK_INPUTS)
 OUTPUT_NAMES = ["steering", "target_speed", "brake"]
+
+
+def validate_generation_limit(value):
+    if type(value) is not int or not 1 <= value <= MAX_GENERATION_LIMIT:
+        raise ValueError("Generations must be an integer from 1 to 10000.")
+    return value
 
 
 def _weights(value, architecture="compact"):
@@ -99,11 +106,12 @@ class Cars:
 
 
 class Trainer:
-    def __init__(self, track, population=64, seed=42, architecture="compact"):
+    def __init__(self, track, population=64, seed=42, architecture="compact", generation_limit=MAX_GENERATIONS):
         if type(population) is not int or not 16 <= population <= 128:
             raise ValueError("Population must be an integer from 16 to 128.")
         if type(seed) is not int or not 0 <= seed <= 2**32 - 1:
             raise ValueError("Seed must be an integer from 0 to 4294967295.")
+        self.generation_limit = validate_generation_limit(generation_limit)
         self.track, self.population, self.seed = track, population, seed
         self.architecture = get_architecture(architecture)
         self.rng = np.random.default_rng(seed)
@@ -345,7 +353,7 @@ class Trainer:
     def evolve(self):
         if not self.done:
             raise ValueError("Finish the current generation before evolving.")
-        if self.generation >= MAX_GENERATIONS:
+        if self.complete:
             return False
         order = np.argsort(-self.cars.fitness, kind="stable")
         elite = max(2, self.population // 16)
@@ -360,6 +368,20 @@ class Trainer:
         self.generation += 1
         self.start_generation()
         return True
+
+    @property
+    def complete(self):
+        return self.done and len(self.history) >= self.generation_limit
+
+    @property
+    def minimum_generation_limit(self):
+        return len(self.history) if self.done else self.generation + 1
+
+    def set_generation_limit(self, generation_limit):
+        generation_limit = validate_generation_limit(generation_limit)
+        if generation_limit < self.minimum_generation_limit:
+            raise ValueError(f"Generations must be at least {self.minimum_generation_limit} for this run. Reset to use a smaller budget.")
+        self.generation_limit = generation_limit
 
     def activity(self, index=None):
         index = self.best_index if index is None else index
@@ -396,6 +418,7 @@ class Trainer:
         cars = [self.car_snapshot(i) for i in range(self.population)]
         return {
             "generation": self.generation, "step_count": self.step_count, "done": self.done, "best_index": index,
+            "seed": self.seed, "generation_limit": self.generation_limit, "completed_generations": len(self.history),
             "cars": cars, "sensors": {"values": sensors["values"][index].tolist(), "endpoints": sensors["endpoints"][index].tolist()},
             "brain": brain, "network": self.network(index), "history": [dict(item) for item in self.history],
             "controls": {"steering": float(self.cars.steering[index]), "target_speed": float(self.cars.target_speed[index]),

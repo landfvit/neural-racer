@@ -80,6 +80,16 @@ class SpeedRequest(BaseModel):
     speed: StrictInt
 
 
+class GenerationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    generations: StrictInt
+
+
+class SeedRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    seed: StrictInt
+
+
 class CircuitRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: StrictStr
@@ -181,6 +191,14 @@ def create_app(*, live=True):
         if body.speed not in {1, 4, 16}:
             raise ValueError("Choose 1x, 4x, or 16x speed.")
         return workbench.set_speed(body.speed)
+
+    @application.post("/api/generations")
+    def generations(body: GenerationRequest):
+        return workbench.set_generations(body.generations)
+
+    @application.post("/api/seed")
+    def seed(body: SeedRequest):
+        return workbench.set_seed(body.seed)
 
     @application.get("/api/model")
     def model():
