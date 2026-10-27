@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from starlette.websockets import WebSocketDisconnect
 
+import app as app_module
 from app import MAX_FILE_BYTES, create_app
 from racer.service import Workbench
 from racer.tracks import sample_track
@@ -27,6 +28,10 @@ def image_bytes(pixels):
 
 def test_viewer_starts_with_real_cars_and_no_documentation_page(client):
     assert client.get("/").status_code == 200
+    viewer = client.get("/workbench")
+    assert viewer.status_code == 200
+    assert viewer.content == client.get("/static/index.html").content
+    assert viewer.headers["cache-control"] == "no-cache"
     for path in ("/docs", "/redoc", "/openapi.json"):
         assert client.get(path).status_code == 404
     state = client.get("/api/state").json()
@@ -45,6 +50,32 @@ def test_viewer_starts_with_real_cars_and_no_documentation_page(client):
     response = client.get(state["track"]["image_url"])
     assert response.headers["content-type"] == "image/png"
     assert Image.open(io.BytesIO(response.content)).size == (state["track"]["width"], state["track"]["height"])
+
+
+@pytest.mark.parametrize("built_homepage", [False, True])
+def test_homepage_uses_the_optional_site_build_and_preserves_the_workbench(monkeypatch, tmp_path, built_homepage):
+    static = tmp_path / "static"
+    static.mkdir()
+    viewer_html = "<!doctype html><title>Original training workbench</title>"
+    (static / "index.html").write_text(viewer_html, encoding="utf-8")
+    homepage_html = "<!doctype html><title>Neural Racer homepage</title>"
+    if built_homepage:
+        (static / "site").mkdir()
+        (static / "site" / "index.html").write_text(homepage_html, encoding="utf-8")
+    monkeypatch.setattr(app_module, "ROOT", tmp_path)
+
+    with TestClient(create_app(live=False)) as current:
+        homepage = current.get("/")
+        assert homepage.status_code == 200
+        assert homepage.text == (homepage_html if built_homepage else viewer_html)
+        assert homepage.headers["content-type"].startswith("text/html")
+        assert homepage.headers["cache-control"] == "no-cache"
+        viewer = current.get("/workbench")
+        assert viewer.status_code == 200 and viewer.text == viewer_html
+        assert viewer.headers["cache-control"] == "no-cache"
+        assert current.get("/static/index.html").text == viewer_html
+        if built_homepage:
+            assert current.get("/static/site/index.html").text == homepage_html
 
 
 def test_training_advances_python_physics_and_pause_stops_it(client):

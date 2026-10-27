@@ -131,7 +131,13 @@ def create_app(*, live=True):
 
     @application.get("/")
     def index():
-        return FileResponse(ROOT / "static" / "index.html")
+        homepage = ROOT / "static" / "site" / "index.html"
+        path = homepage if homepage.is_file() else ROOT / "static" / "index.html"
+        return FileResponse(path, headers={"Cache-Control": "no-cache"})
+
+    @application.get("/workbench")
+    def workbench_page():
+        return FileResponse(ROOT / "static" / "index.html", headers={"Cache-Control": "no-cache"})
 
     @application.get("/api/state")
     def state():

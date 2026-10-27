@@ -17,6 +17,8 @@ are moved apart so cars have room to turn without merging separate roads.
 The prepared layouts are in racer/data/circuit-layouts.json and can be rebuilt
 offline with scripts/build_circuit_layouts.py. The generated PNG examples and
 road masks use these adapted layouts. They are not surveyed circuit boundaries.
+The homepage outlines in frontend/public/circuits.json use the same adapted
+coordinates.
 
 Car physics retain each source map's scale. Elevation and banking are omitted.
 The simulation compresses travel time by a factor of three, so its lap times

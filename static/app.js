@@ -36,6 +36,7 @@ let architectureOptionsKey = "";
 let comparisonRowsKey = "";
 let comparisonLegendKey = "";
 const networkColors = Object.freeze({ compact: "#2563ff", wide: "#ff8500", deep: "#00ad65", split: "#d629f5" });
+const canvasTheme = Object.freeze({ background: "#f9f8fb", muted: "#807987", grid: "#eeebf1", fitness: "#8873b8", lap: "#4c8a73" });
 
 function setStatus(message = "", error = false) {
   if ($("status").textContent !== message) $("status").textContent = message;
@@ -242,12 +243,44 @@ function acceptState(snapshot) {
   drawAll();
 }
 
+function themeTrackImage(image, circuitId) {
+  // only built-in circuit pixels are recolored; uploaded images stay untouched
+  if (typeof circuitId !== "string") return image;
+  const surface = document.createElement("canvas");
+  surface.width = image.naturalWidth;
+  surface.height = image.naturalHeight;
+  const context = surface.getContext("2d");
+  context.drawImage(image, 0, 0);
+  const frame = context.getImageData(0, 0, surface.width, surface.height);
+  const original = frame.data.slice();
+  const background = [22, 27, 31];
+  const road = [224, 228, 232];
+  const isColor = (offset, color) => original[offset] === color[0] && original[offset + 1] === color[1] && original[offset + 2] === color[2];
+  for (let offset = 0; offset < original.length; offset += 4) {
+    let color;
+    if (isColor(offset, background)) color = [249, 248, 251];
+    else if (isColor(offset, road)) {
+      const pixel = offset / 4;
+      const x = pixel % surface.width;
+      const y = Math.floor(pixel / surface.width);
+      // the edge follows the raster mask rather than an estimated road width
+      const edge = x === 0 || y === 0 || x === surface.width - 1 || y === surface.height - 1 ||
+        [offset - 4, offset + 4, offset - surface.width * 4, offset + surface.width * 4].some((neighbor) => isColor(neighbor, background));
+      color = edge ? [198, 191, 210] : [229, 225, 236];
+    }
+    if (color) frame.data.set(color, offset);
+  }
+  context.putImageData(frame, 0, 0);
+  return surface;
+}
+
 function loadTrackImage(url) {
   const token = ++imageToken;
+  const circuitId = state?.track?.circuit_id;
   imageUrl = url;
   trackImage = null;
   const image = new Image();
-  image.onload = () => { if (token === imageToken) { trackImage = image; drawTrack(); } };
+  image.onload = () => { if (token === imageToken) { trackImage = themeTrackImage(image, circuitId); drawTrack(); } };
   image.onerror = () => { if (token === imageToken) setStatus("The track image could not be loaded.", true); };
   image.src = url;
 }
@@ -276,25 +309,25 @@ function drawCar(ctx, car, transform, selected, color = null) {
   ctx.rotate(car.heading);
   ctx.globalAlpha = color ? 1 : selected ? 1 : car.finished ? 0.46 : car.alive ? 0.26 : 0.1;
   // the whole population stays visible at the same marker size as its leader.
-  const markerScale = Math.max(1, 14 / (state.track.car_length * scale), 5 / (state.track.car_width * scale));
+  const markerScale = Math.max(1, 18 / (state.track.car_length * scale), 7 / (state.track.car_width * scale));
   // comparison glyphs have fixed screen dimensions independent of the inspected model.
-  const length = color ? 16 : state.track.car_length * scale * markerScale;
-  const width = color ? 6 : state.track.car_width * scale * markerScale;
+  const length = color ? 20 : state.track.car_length * scale * markerScale;
+  const width = color ? 8 : state.track.car_width * scale * markerScale;
   if (color) {
     // comparison cars share the same outline and dimensions, including the inspected leader.
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 2;
     ctx.strokeRect(-length / 2, -width / 2, length, width);
   }
-  ctx.fillStyle = color || (selected ? "#3e7fbd" : "#8f9da8");
+  ctx.fillStyle = color || (selected ? "#7160ad" : "#9b93ac");
   ctx.fillRect(-length / 2, -width / 2, length, width);
   if (!color && (selected || car.finished)) {
     ctx.strokeStyle = car.finished ? "#64a587" : "#e6f0fa"; ctx.lineWidth = scale;
     ctx.strokeRect(-length / 2 + scale / 2, -width / 2 + scale / 2, length - scale, width - scale);
   }
-  ctx.fillStyle = color ? "#15222f" : selected ? "#263c51" : "#4d5d6c";
+  ctx.fillStyle = color ? "#15222f" : selected ? "#40364f" : "#70657d";
   for (const dx of [-length * 0.29, length * 0.29]) for (const dy of [-width * 0.42, width * 0.42]) ctx.fillRect(dx - length * 0.115, dy - width * 0.08, length * 0.23, width * 0.16);
-  ctx.fillStyle = color ? "#e4f4ff" : selected ? "#bad5eb" : "#ccd5dc";
+  ctx.fillStyle = color ? "#e4f4ff" : selected ? "#ded5f2" : "#e3deeb";
   ctx.fillRect(length * 0.05, -width * 0.35, length * 0.2, width * 0.7);
   // rear lamps use the applied brake pedal, not a diagnostic network output.
   if (Number.isFinite(car.brake) && car.brake > 0) {
@@ -306,10 +339,10 @@ function drawCar(ctx, car, transform, selected, color = null) {
 
 function drawTrack() {
   const { width, height, ctx } = canvasSize("track");
-  ctx.fillStyle = "#edf0f3";
+  ctx.fillStyle = canvasTheme.background;
   ctx.fillRect(0, 0, width, height);
   if (!state) {
-    ctx.fillStyle = "#9aa5b0"; ctx.font = "11px ui-monospace, monospace"; ctx.textAlign = "center";
+    ctx.fillStyle = canvasTheme.muted; ctx.font = "12px -apple-system, BlinkMacSystemFont, sans-serif"; ctx.textAlign = "center";
     ctx.fillText("Loading track…", width / 2, height / 2);
     return;
   }
@@ -318,8 +351,8 @@ function drawTrack() {
   if (trackImage) ctx.drawImage(trackImage, transform.x, transform.y, state.track.width * scale, state.track.height * scale);
   const car = leader();
   if (car && $("show-rays").checked && Array.isArray(state.sensors?.endpoints)) {
-    ctx.strokeStyle = state.comparison ? `${networkColors[state.network?.id] || "#2563ff"}88` : "#3d82b66b";
-    ctx.fillStyle = state.comparison ? networkColors[state.network?.id] || "#2563ff" : "#5998c6"; ctx.lineWidth = 1;
+    ctx.strokeStyle = state.comparison ? `${networkColors[state.network?.id] || "#2563ff"}88` : "#8b73bd88";
+    ctx.fillStyle = state.comparison ? networkColors[state.network?.id] || "#2563ff" : "#8b73bd"; ctx.lineWidth = 1;
     for (const point of state.sensors.endpoints) {
       const x = transform.x + point[0] * scale;
       const y = transform.y + point[1] * scale;
@@ -348,16 +381,16 @@ function drawNetwork() {
   networkNodes = [];
   const counts = network?.sizes;
   if (!Array.isArray(counts) || counts.length < 2) {
-    ctx.fillStyle = "#9aa5b0"; ctx.font = "10px ui-monospace, monospace"; ctx.textAlign = "center";
+    ctx.fillStyle = canvasTheme.muted; ctx.font = "12px -apple-system, BlinkMacSystemFont, sans-serif"; ctx.textAlign = "center";
     ctx.fillText("Loading network…", width / 2, height / 2);
     $("network-info").textContent = "";
     return;
   }
   const lastLayer = counts.length - 1;
-  const left = 72;
-  const right = width - 37;
-  const top = 34;
-  const bottom = height - 32;
+  const left = 80;
+  const right = width - 54;
+  const top = 40;
+  const bottom = height - 40;
   const labelNames = {
     wall_left_60: "Ray -60", wall_left_30: "Ray -30", wall_forward: "Ahead",
     wall_right_30: "Ray +30", wall_right_60: "Ray +60",
@@ -383,12 +416,12 @@ function drawNetwork() {
       if (!start || !end || !Number.isFinite(weight)) continue;
       const active = !focused || (focused.layer === layer && focused.index === from) || (focused.layer === layer + 1 && focused.index === to);
       const strength = Math.tanh(Math.abs(weight) / 2);
-      ctx.strokeStyle = weight >= 0 ? `rgba(71,126,166,${active ? 0.1 + strength * 0.3 : 0.015})` : `rgba(174,103,117,${active ? 0.1 + strength * 0.3 : 0.015})`;
+      ctx.strokeStyle = weight >= 0 ? `rgba(127,111,175,${active ? 0.1 + strength * 0.3 : 0.015})` : `rgba(190,125,155,${active ? 0.1 + strength * 0.3 : 0.015})`;
       ctx.lineWidth = 0.4 + strength * 1.1;
       ctx.beginPath(); ctx.moveTo(start.x + 4, start.y); ctx.lineTo(end.x - 4, end.y); ctx.stroke();
     }
   }
-  ctx.textAlign = "center"; ctx.font = "8px ui-monospace, monospace"; ctx.fillStyle = "#9ca7b2";
+  ctx.textAlign = "center"; ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif"; ctx.fillStyle = canvasTheme.muted;
   layerNodes.forEach((nodes, layer) => {
     if (nodes.length) ctx.fillText(layer === 0 ? "Inputs" : layer === lastLayer ? "Outputs" : `Hidden ${layer}`, nodes[0].x, 14);
   });
@@ -396,15 +429,15 @@ function drawNetwork() {
     const value = activations[node.layer]?.[node.index];
     const magnitude = Number.isFinite(value) ? Math.min(1, Math.abs(value)) : 0;
     const active = focused && node.layer === focused.layer && node.index === focused.index;
-    const base = value < 0 ? [181, 111, 127] : [86, 140, 179];
-    const fill = [244, 246, 248].map((part, index) => Math.round(part + (base[index] - part) * magnitude));
+    const base = value < 0 ? [193, 128, 155] : [127, 111, 175];
+    const fill = [249, 247, 251].map((part, index) => Math.round(part + (base[index] - part) * magnitude));
     ctx.fillStyle = `rgb(${fill.join(",")})`;
-    ctx.strokeStyle = active ? "#4f789b" : "#abbac7";
+    ctx.strokeStyle = active ? "#76619c" : "#bbb0ca";
     ctx.lineWidth = active ? 1.8 : 0.8;
     const hidden = node.layer > 0 && node.layer < lastLayer;
     const radius = hidden ? Math.max(2.5, Math.min(4, (bottom - top) / Math.max(1, counts[node.layer] - 1) * 0.3)) : 5;
     ctx.beginPath(); ctx.arc(node.x, node.y, radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.font = "8px ui-monospace, monospace"; ctx.fillStyle = "#8c9aa8";
+    ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif"; ctx.fillStyle = canvasTheme.muted;
     if (node.layer === 0) { ctx.textAlign = "left"; ctx.fillText(humanName(network.inputs?.[node.index]), 8, node.y - 3); ctx.fillText(scalar(value), 8, node.y + 9); }
     if (node.layer === lastLayer) { ctx.textAlign = "center"; ctx.fillText(humanName(network.outputs?.[node.index]), node.x, node.y + 15); }
   }
@@ -431,25 +464,25 @@ function drawHistory() {
   if (state?.comparison) { drawComparisonHistory(); return; }
   const { width, height, ctx } = canvasSize("history");
   const history = state?.history || [];
-  const area = { left: 48, right: width - 42, top: 15, bottom: height - 22 };
+  const area = { left: 55, right: width - 52, top: 27, bottom: height - 30 };
   if (area.right <= area.left || area.bottom <= area.top) return;
   const lastGeneration = Math.max(0, generationLimit - 1);
   const x = (generation) => area.left + generation / Math.max(1, lastGeneration) * (area.right - area.left);
   const fitnessY = (value) => area.bottom - (value - fitnessDomain.min) / (fitnessDomain.max - fitnessDomain.min) * (area.bottom - area.top);
   const timeY = (value) => area.bottom - value / TIME_LIMIT * (area.bottom - area.top);
-  ctx.font = "8px ui-monospace, monospace";
-  ctx.fillStyle = "#76a28a"; ctx.textAlign = "right"; ctx.fillText("Time(s)", area.left - 7, 8);
-  ctx.fillStyle = "#648cb4"; ctx.textAlign = "left"; ctx.fillText("Fitness", area.right + 7, 8);
+  ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillStyle = canvasTheme.lap; ctx.textAlign = "left"; ctx.fillText("Time (s)", 12, 14);
+  ctx.fillStyle = canvasTheme.fitness; ctx.textAlign = "right"; ctx.fillText("Fitness", width - 12, 14);
   for (const ratio of [0, 0.5, 1]) {
     const y = area.bottom - ratio * (area.bottom - area.top);
-    ctx.strokeStyle = "#eef1f4"; ctx.lineWidth = 1;
+    ctx.strokeStyle = canvasTheme.grid; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(area.left, y); ctx.lineTo(area.right, y); ctx.stroke();
-    ctx.fillStyle = "#9ea9b5"; ctx.textAlign = "right";
+    ctx.fillStyle = canvasTheme.muted; ctx.textAlign = "right";
     ctx.fillText(scalar(ratio * TIME_LIMIT, ratio === 0 ? 0 : 2), area.left - 7, y + 3);
     ctx.textAlign = "left"; ctx.fillText(String(Math.round(fitnessDomain.min + ratio * (fitnessDomain.max - fitnessDomain.min))), area.right + 7, y + 3);
   }
   for (const generation of new Set([0, Math.floor(lastGeneration / 2), lastGeneration])) { ctx.textAlign = "center"; ctx.fillText(String(generation), x(generation), area.bottom + 15); }
-  for (const [field, color, scale] of [["best_fitness", "#648cb4", fitnessY], ["lap_time", "#76a28a", timeY]]) {
+  for (const [field, color, scale] of [["best_fitness", canvasTheme.fitness, fitnessY], ["lap_time", canvasTheme.lap, timeY]]) {
     if (!history.length) continue;
     ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.beginPath();
     let connected = false;
@@ -486,7 +519,7 @@ function renderComparison() {
     comparisonLegendKey = legendKey;
     const legend = $("history-legend");
     legend.replaceChildren();
-    const items = comparison ? entries.map((entry) => [entry.name, networkColors[entry.id] || "#748492"]) : [["Lap time / lower is better", "#76a28a"], ["Best fitness", "#648cb4"]];
+    const items = comparison ? entries.map((entry) => [entry.name, networkColors[entry.id] || "#748492"]) : [["Lap time / lower is better", canvasTheme.lap], ["Best fitness", canvasTheme.fitness]];
     for (const [label, color] of items) {
       const item = document.createElement("span");
       const key = document.createElement("i");
@@ -539,7 +572,7 @@ function renderComparison() {
 function drawComparisonHistory() {
   const { width, height, ctx } = canvasSize("history");
   const comparison = state.comparison;
-  const area = { left: 48, right: width - 20, top: 20, bottom: height - 27 };
+  const area = { left: 55, right: width - 20, top: 27, bottom: height - 32 };
   if (area.right <= area.left || area.bottom <= area.top) return;
   const lastGeneration = Math.max(0, generationLimit - 1);
   const times = comparison.entries.flatMap((entry) => (entry.history || []).map((point) => point.best_time)).filter(Number.isFinite);
@@ -551,15 +584,15 @@ function drawComparisonHistory() {
   const maximum = times.length ? Math.min(TIME_LIMIT, slowest + padding) : TIME_LIMIT;
   const x = (generation) => area.left + generation / Math.max(1, lastGeneration) * (area.right - area.left);
   const y = (time) => area.bottom - (time - minimum) / (maximum - minimum) * (area.bottom - area.top);
-  ctx.font = "8px ui-monospace, monospace";
-  ctx.fillStyle = "#8997a5"; ctx.textAlign = "left";
-  ctx.fillText("Best lap (s)", area.left, 10);
+  ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
+  ctx.fillStyle = canvasTheme.muted; ctx.textAlign = "left";
+  ctx.fillText("Best lap (s)", area.left, 14);
   for (const ratio of [0, 0.5, 1]) {
     const value = minimum + ratio * (maximum - minimum);
     const lineY = y(value);
-    ctx.strokeStyle = "#eef1f4"; ctx.lineWidth = 1;
+    ctx.strokeStyle = canvasTheme.grid; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(area.left, lineY); ctx.lineTo(area.right, lineY); ctx.stroke();
-    ctx.fillStyle = "#8997a5"; ctx.textAlign = "right";
+    ctx.fillStyle = canvasTheme.muted; ctx.textAlign = "right";
     ctx.fillText(scalar(value, value === 0 ? 0 : 2), area.left - 7, lineY + 3);
   }
   for (const generation of new Set([0, Math.floor(lastGeneration / 2), lastGeneration])) {
@@ -588,7 +621,7 @@ function drawComparisonHistory() {
     if (latest) { ctx.beginPath(); ctx.arc(latest.x, latest.y, 2.5, 0, Math.PI * 2); ctx.fill(); }
   }
   if (!hasLap) {
-    ctx.fillStyle = "#9aa5b0"; ctx.textAlign = "center";
+    ctx.fillStyle = canvasTheme.muted; ctx.textAlign = "center";
     ctx.fillText("Waiting for the first completed lap", (area.left + area.right) / 2, (area.top + area.bottom) / 2);
   }
   canvases.history.setAttribute("aria-label", `Cumulative best lap times by generation, from 0 to ${lastGeneration}, on the same track. ${comparison.entries.map((entry) => `${entry.name}: ${Number.isFinite(entry.best_time) ? timeLabel(entry.best_time) : "no completed lap"}`).join(". ")}. Lower times are better.`);
@@ -693,7 +726,13 @@ canvases.network.addEventListener("pointermove", (event) => {
   const bounds = canvases.network.getBoundingClientRect();
   const x = event.clientX - bounds.left;
   const y = event.clientY - bounds.top;
-  hoveredNode = networkNodes.find((node) => Math.hypot(x - node.x, y - node.y) < 9) || null;
+  // densely packed layers should inspect the closest neuron
+  let distance = 9;
+  hoveredNode = null;
+  for (const node of networkNodes) {
+    const gap = Math.hypot(x - node.x, y - node.y);
+    if (gap < distance) { hoveredNode = node; distance = gap; }
+  }
   drawNetwork();
 });
 canvases.network.addEventListener("pointerleave", () => { hoveredNode = null; drawNetwork(); });

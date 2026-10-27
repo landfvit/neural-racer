@@ -4,32 +4,54 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <title>Neural Racer</title>
-    <link rel="stylesheet" href="/static/style.css?v=faa9b6b05c78">
-    <script src="/static/app.js?v=af3a1a0519d3" defer></script>
+    <title>NeuralRacer / Workbench</title>
+    <link rel="stylesheet" href="/static/style.css?v=b64a04ef4db6">
+    <script src="/static/app.js?v=8cafe2faa700" defer></script>
   </head>
   <body>
-    <header class="toolbar">
-      <h1>Neural Racer</h1>
-      <input id="track-file" type="file" accept="image/png,image/jpeg" hidden>
-      <button id="upload-button" type="button" title="Upload a top-down loop track as PNG or JPEG, up to 8 MB">Upload track ↑</button>
-      <label class="circuit-label"><span class="visually-hidden">Circuit</span><select id="circuit-select" title="Choose a circuit" disabled><option value="">Loading circuits</option></select></label>
-      <label class="architecture-label"><span class="visually-hidden">Network</span><select id="architecture-select" title="Choose a neural network" disabled><option value="">Loading networks</option></select></label>
-      <button id="train-button" class="primary" type="button" disabled>Train</button>
-      <button id="compare-button" type="button" title="Start fresh populations of all four networks with the selected seed and generation count" disabled>Compare networks</button>
-      <button id="single-button" type="button" title="Start a fresh run of the selected network and show its whole population" hidden disabled>Single network</button>
-      <button id="reset-button" type="button" title="Start a fresh population on this track" disabled>Reset</button>
-      <label class="speed-label"><span class="visually-hidden">Training speed</span><select id="speed-select" title="Training speed" disabled><option value="1">1x</option><option value="4">4x</option><option value="16">16x</option></select></label>
-      <label class="run-setting">Generations<select id="generations-select" title="Generation limit. Increase it to continue an existing run." disabled><option value="100">100</option><option value="250">250</option><option value="500">500</option><option value="1000">1000</option></select></label>
-      <label class="run-setting">Seed<input id="seed-input" type="number" min="0" max="4294967295" step="1" value="42" title="Random seed. Changing it starts a fresh paused run." disabled></label>
-      <label class="rays-label"><input id="show-rays" type="checkbox" checked>Rays</label>
-      <button id="view-network-button" type="button" aria-haspopup="dialog" aria-controls="network-dialog">View network</button>
-      <button id="save-button" type="button" title="Download the best completed neural policy as JSON" disabled>Save brain ↓</button>
+    <header class="site-header">
+      <div class="brand"><a class="wordmark" href="/">NeuralRacer</a><h1>Workbench</h1></div>
+      <nav aria-label="Main navigation"><a href="/">Home</a><a href="https://github.com/landfvit/neural-racer" target="_blank" rel="noreferrer">GitHub</a></nav>
     </header>
+
+    <section class="toolbar" aria-label="Training controls">
+      <div class="control-fields">
+        <label class="field circuit-label" for="circuit-select"><span>Circuit</span><select id="circuit-select" title="Choose a circuit" disabled><option value="">Loading circuits</option></select></label>
+        <label class="field architecture-label" for="architecture-select"><span>Network</span><select id="architecture-select" title="Choose a neural network" disabled><option value="">Loading networks</option></select></label>
+        <label class="field run-setting" for="generations-select"><span>Generations</span><select id="generations-select" title="Generation limit. Increase it to continue an existing run." disabled><option value="100">100</option><option value="250">250</option><option value="500">500</option><option value="1000">1000</option></select></label>
+        <label class="field run-setting" for="seed-input"><span>Seed</span><input id="seed-input" type="number" min="0" max="4294967295" step="1" value="42" title="Random seed. Changing it starts a fresh paused run." disabled></label>
+        <label class="field speed-label" for="speed-select"><span>Training speed</span><select id="speed-select" title="Training speed" disabled><option value="1">1x</option><option value="4">4x</option><option value="16">16x</option></select></label>
+      </div>
+      <div class="control-actions">
+        <div class="run-actions">
+          <button id="train-button" class="primary" type="button" disabled>Train</button>
+          <button id="compare-button" type="button" title="Start fresh populations of all four networks with the selected seed and generation count" disabled>Compare networks</button>
+          <button id="single-button" type="button" title="Start a fresh run of the selected network and show its whole population" hidden disabled>Single network</button>
+          <button id="reset-button" type="button" title="Start a fresh population on this track" disabled>Reset</button>
+        </div>
+        <div class="view-actions">
+          <label class="rays-label" for="show-rays"><input id="show-rays" type="checkbox" checked>Rays</label>
+          <input id="track-file" type="file" accept="image/png,image/jpeg" hidden>
+          <button id="upload-button" class="text-button" type="button" title="Upload a top-down loop track as PNG or JPEG, up to 8 MB">Upload track</button>
+          <button id="view-network-button" class="text-button" type="button" aria-haspopup="dialog" aria-controls="network-dialog">Network</button>
+          <button id="save-button" class="text-button" type="button" title="Download the best completed neural policy as JSON" disabled>Save brain</button>
+        </div>
+      </div>
+    </section>
 
     <main class="workspace" id="workspace">
       <section class="pane track-pane" aria-label="Live cars learning a track">
-        <div class="track-heading"><h2 id="track-name">Track</h2><div class="race-stats"><span>Generation <strong id="generation">0</strong></span><span>Lap <strong id="laps">0 / 1</strong></span><span>Time <strong id="leader-time">0.00 s</strong></span><span class="record-stat">Best <strong id="best-time">—</strong></span><span>Active <strong id="alive">0 / 64</strong></span></div><span id="run-state" class="quiet">Connecting</span></div>
+        <div class="track-heading">
+          <h2 id="track-name">Track</h2>
+          <div class="race-stats">
+            <span>Generation <strong id="generation">0</strong></span>
+            <span>Lap <strong id="laps">0 / 1</strong></span>
+            <span>Time <strong id="leader-time">0.00 s</strong></span>
+            <span class="record-stat">Best <strong id="best-time">—</strong></span>
+            <span>Active <strong id="alive">0 / 64</strong></span>
+          </div>
+          <span id="run-state" class="quiet">Connecting</span>
+        </div>
         <div class="track-wrap" id="track-wrap"><canvas id="track-canvas" role="img" aria-label="Live population of neural cars on the track"></canvas><div id="drop-label" class="drop-label" hidden>Drop track image</div></div>
         <div class="track-footer"><span id="leader-label">Leader 01</span><span id="leader-state">Driving</span><span id="step-label">Step 0</span><span id="track-size"></span></div>
       </section>
@@ -46,6 +68,7 @@
         </div>
       </section>
     </main>
+
     <dialog id="network-dialog" aria-labelledby="network-title">
       <section class="network-pane" aria-label="Live leader neural network">
         <div class="pane-heading"><h2 id="network-title">Leader network</h2><span id="network-leader" class="quiet">Car 01</span><button id="close-network-button" type="button" autofocus>Close</button></div>
